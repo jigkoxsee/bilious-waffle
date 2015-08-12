@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-//	"strconv"
+	//	"strconv"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
-	"encoding/json"
 )
 
 type SlackPost struct {
@@ -23,10 +23,21 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Home %s", r.URL.Path[1:])
 }
 
+func fbBot(group string, msg string) ([]byte, error) {
+	fbHost := os.Getenv("GO_HOST")
+	res, err := http.Get(fbHost + "/" + group + "/" + msg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	bot, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	return bot, err
+}
+
 func handlerThoth(w http.ResponseWriter, r *http.Request) {
 	log.Println("Thoth")
 
-	fbHost := os.Getenv("GO_HOST")
 	slackToken := os.Getenv("GO_TOKEN")
 
 	slack := SlackPost{
@@ -41,26 +52,19 @@ func handlerThoth(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Token not match")
 	} else {
 		fmt.Fprintf(w, "Thoth %s", slack)
-
+		bot, err := fbBot("thoth", slack.Channel+":"+slack.Username+":"+slack.Text)
+		if err != nil {
+			log.Println(err)
+		}
 		//--
-		res, err := http.Get(fbHost + "/thoth/" + slack.Channel + ":" + slack.Username + ":" + slack.Text)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		bot, err := ioutil.ReadAll(res.Body)
-		res.Body.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
 		fmt.Fprintf(w, "Thoth req %s", bot)
 	}
 
 }
 
 func handlerLeafbox(w http.ResponseWriter, r *http.Request) {
-	body,err := ioutil.ReadAll(r.Body)
-	if err!=nil {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
 		log.Println(err)
 	}
 
@@ -72,27 +76,36 @@ func handlerLeafbox(w http.ResponseWriter, r *http.Request) {
 	//log.Println(dat["action"].(string))
 
 	// Case
+	var msg string
 	xEvent := r.Header.Get("X-GitHub-Event")
 	switch xEvent {
 	case "pull_request":
-		log.Printf("PR #%d %s by @%s",int(dat["number"].(float64)),
+		msg = fmt.Sprintf("PR #%d %s by @%s", int(dat["number"].(float64)),
 			dat["action"],
 			dat["sender"].(map[string]interface{})["login"])
 	case "pull_request_review_comment":
-		log.Printf("PR Comment #%d by @%s",int(dat["number"].(float64)),
+		msg = fmt.Sprintf("PR Comment #%d by @%s", int(dat["number"].(float64)),
 			dat["sender"].(map[string]interface{})["login"])
 	case "issues":
-		log.Printf("Issue #%d %s by @%s",int(dat["issue"].(map[string]interface{})["number"].(float64)),
+		msg = fmt.Sprintf("Issue #%d %s by @%s", int(dat["issue"].(map[string]interface{})["number"].(float64)),
 			dat["action"],
 			dat["sender"].(map[string]interface{})["login"])
 	case "issue_comment":
-		log.Printf("Issue Comment #%d by @%s",int(dat["issue"].(map[string]interface{})["number"].(float64)),
+		msg = fmt.Sprintf("Issue Comment #%d by @%s", int(dat["issue"].(map[string]interface{})["number"].(float64)),
 			dat["sender"].(map[string]interface{})["login"])
 	default:
-		log.Println("case default")
+		msg = ""
 	}
-
-	fmt.Fprintf(w, "Leafbox body %s", dat)
+	log.Println("MSG:" + msg)
+	if msg != "" {
+		bot, err := fbBot("leafbox", msg)
+		if err != nil {
+			log.Println(err)
+		}
+		fmt.Fprintf(w, "Leafbox body %s", bot)
+	} else {
+		fmt.Fprintf(w, "Leafbox body %s", msg)
+	}
 	//fmt.Fprintf(w, "Leafbox json %s", t)
 }
 
