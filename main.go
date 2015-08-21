@@ -25,7 +25,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 func fbBot(group string, msg string) ([]byte, error) {
 	fbHost := os.Getenv("GO_HOST")
-	res, err := http.Get(fbHost + "/" + group + "/" + msg)
+	reqUrl := fbHost + "/" + group + "/" + msg
+	log.Println(reqUrl)
+	res, err := http.Get(reqUrl)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -52,7 +54,7 @@ func handlerThoth(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Token not match")
 	} else {
 		fmt.Fprintf(w, "Thoth %s", slack)
-		bot, err := fbBot("thoth", slack.Channel+":"+slack.Username+":"+slack.Text)
+		bot, err := fbBot("thoth", slack.Channel+":"+slack.Username+":"+slack.Text[2:])
 		if err != nil {
 			log.Println(err)
 		}
@@ -80,32 +82,31 @@ func handlerLeafbox(w http.ResponseWriter, r *http.Request) {
 	xEvent := r.Header.Get("X-GitHub-Event")
 	switch xEvent {
 	case "pull_request":
-		msg = fmt.Sprintf("PR #%d %s by @%s", int(dat["number"].(float64)),
+		msg = fmt.Sprintf("PR %d %s by @%s", int(dat["number"].(float64)),
 			dat["action"],
 			dat["sender"].(map[string]interface{})["login"])
 	case "pull_request_review_comment":
-		msg = fmt.Sprintf("PR Comment #%d by @%s", int(dat["number"].(float64)),
-			dat["sender"].(map[string]interface{})["login"])
+		msg = fmt.Sprintf("PR Comment %d by @%s \n %s", int(dat["pull_request"].(map[string]interface{})["number"].(float64)),
+			dat["sender"].(map[string]interface{})["login"],dat["pull_request"].(map[string]interface{})["html_url"])
 	case "issues":
-		msg = fmt.Sprintf("Issue #%d %s by @%s", int(dat["issue"].(map[string]interface{})["number"].(float64)),
+		msg = fmt.Sprintf("Issue %d %s by @%s", int(dat["issue"].(map[string]interface{})["number"].(float64)),
 			dat["action"],
 			dat["sender"].(map[string]interface{})["login"])
 	case "issue_comment":
-		msg = fmt.Sprintf("Issue Comment #%d by @%s", int(dat["issue"].(map[string]interface{})["number"].(float64)),
-			dat["sender"].(map[string]interface{})["login"])
+		msg = fmt.Sprintf("Issue Comment %d by @%s \n %s", int(dat["issue"].(map[string]interface{})["number"].(float64)),
+			dat["sender"].(map[string]interface{})["login"],dat["issue"].(map[string]interface{})["html_url"])
 	default:
 		msg = ""
 	}
 	log.Println("MSG:" + msg)
 	if msg != "" {
-		bot, err := fbBot("leafbox", msg)
+		_, err := fbBot("leafbox", msg)
 		if err != nil {
 			log.Println(err)
 		}
-		fmt.Fprintf(w, "Leafbox body %s", bot)
 	} else {
-		fmt.Fprintf(w, "Leafbox body %s", msg)
 	}
+	fmt.Fprintf(w, "Leafbox body %s", msg)
 	//fmt.Fprintf(w, "Leafbox json %s", t)
 }
 
